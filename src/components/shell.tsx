@@ -22,7 +22,7 @@ export function Shell({ children, athlete }: { children: React.ReactNode; athlet
   return <div className="app-shell">
     <a className="skip-link" href="#main">{t.common.skip}</a>
     <aside className="sidebar"><Brand href="/today"/><div className="workspace-label">{t.shell.trainingSpace}</div>
-      <nav aria-label={t.shell.navigation}>{navigation.map(({href,label,icon: Icon}) => <Link key={href} href={href} aria-current={activePath === href ? "page" : undefined} className={`nav-link ${activePath === href ? "active" : ""}`}><Icon size={20}/><span>{label}</span>{href === "/coach" && <span className="ai-badge">{t.common.ai}</span>}</Link>)}</nav>
+      <nav aria-label={t.shell.navigation}>{navigation.map(({href,label,icon: Icon}) => <Link key={href} href={href} aria-current={activePath === href ? "page" : undefined} className={`nav-link ${activePath === href ? "active" : ""}`}><Icon size={20}/><span>{label}</span></Link>)}</nav>
       <div className="sidebar-bottom"><div className="sidebar-footer"><span className="avatar">{athlete.initials}</span><div><strong>{athlete.name}</strong><small>{t.shell.account}</small></div></div></div>
     </aside>
     <div className="main-wrap"><header className="topbar"><span className="breadcrumb">{t.common.workspace}<span>/</span><strong>{navigation.find(n => n.href === activePath)?.label ?? t.shell.today}</strong></span><div className="topbar-actions"><LanguageSwitcher/><ThemeToggle/><Link href="/profile" className="avatar small" aria-label={t.shell.profile}>{athlete.initials}</Link></div></header><main id="main">{children}</main><footer className="page-footer"><span>ATHLETEOS</span><span>{t.common.tagline}</span></footer></div>

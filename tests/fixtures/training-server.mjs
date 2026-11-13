@@ -3,11 +3,11 @@ import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 const athlete = "00000000-0000-4000-8000-000000000021";
-let profile, settings, exercises, records, sessions, failDelete;
+let profile, settings, exercises, records, sessions, failDelete, coachPreferences;
 function reset() {
   profile = { id: athlete, name: "", preferred_units: "kg", experience: "beginner", primary_goals: [], secondary_goals: [], limitations: [] };
   settings = { training_days_per_week: 5, available_minutes: 60, timezone: "America/Tijuana", equipment: [], disciplines: [], onboarding_completed_at: null };
-  exercises = []; records = []; sessions = []; failDelete=false;
+  exercises = []; records = []; sessions = []; failDelete=false; coachPreferences=null;
 }
 reset();
 function send(response, data, status = 200) { response.writeHead(status, { "Content-Type": "application/json" }); response.end(JSON.stringify(data)); }
@@ -22,6 +22,12 @@ createServer(async (request, response) => {
   if (url.pathname === "/auth/v1/user") return send(response, { id: athlete, aud: "authenticated", role: "authenticated", email: "fixture@example.test", app_metadata: {}, user_metadata: {}, created_at: "2026-01-01T00:00:00Z" });
   if (!url.pathname.startsWith("/rest/v1/")) return send(response, { error: "Unexpected fixture endpoint" }, 400);
   const table = url.pathname.replace("/rest/v1/", "");
+  if (table === "coach_preferences") return send(response,coachPreferences);
+  if (table === "rpc/save_coach_preferences") {
+    const p=input.payload;
+    if((coachPreferences?.updated_at ?? null)!==p.expected_updated_at)return send(response,{message:"Stale preferences"},400);
+    coachPreferences={focus:p.focus,goal:p.goal,coaching_style:p.coaching_style,updated_at:new Date().toISOString(),setup_completed_at:coachPreferences?.setup_completed_at ?? new Date().toISOString()};return send(response,coachPreferences);
+  }
   if (table === "rpc/save_athlete_profile") { profile = { ...profile, ...input.payload }; settings = { ...settings, ...input.payload, onboarding_completed_at: new Date().toISOString() }; return send(response, null); }
   if (table === "rpc/delete_training_session") {
     if(failDelete){failDelete=false;return send(response,{message:"Fixture failure"},400);}

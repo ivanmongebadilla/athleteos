@@ -1,0 +1,5 @@
+select 'Private coach preferences table with RLS' as check_name,count(*)::text as actual,'1' as expected from pg_tables where schemaname='public' and tablename='coach_preferences' and rowsecurity
+union all select 'Coach preference columns',count(*)::text,'7' from information_schema.columns where table_schema='public' and table_name='coach_preferences'
+union all select 'Authenticated preference RPC',count(*)::text,'1' from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='save_coach_preferences' and p.prosecdef and has_function_privilege('authenticated',p.oid,'execute') and not has_function_privilege('anon',p.oid,'execute')
+union all select 'Direct client preference writes',count(*)::text,'0' from information_schema.role_table_grants where table_schema='public' and table_name='coach_preferences' and grantee in ('anon','authenticated') and privilege_type in ('INSERT','UPDATE','DELETE')
+union all select 'Temporary coach test users',count(*)::text,'0' from auth.users where id in ('00000000-0000-4000-8000-000000000043','00000000-0000-4000-8000-000000000044');

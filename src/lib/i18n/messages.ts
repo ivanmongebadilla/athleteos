@@ -7,7 +7,7 @@ const en = {
     signIn: "Sign in", createAccount: "Create account", openWorkspace: "Open workspace", home: "Home",
     language: "Language", skip: "Skip to content", dark: "Use dark theme", light: "Use light theme",
     tagline: "Built for the long game.", workspace: "Workspace", athlete: "Athlete", phase: "Phase",
-    backHome: "Back to home", loading: "Please wait…", retry: "Try again", ai: "AI",
+    backHome: "Back to home", loading: "Please wait…", retry: "Try again",
   },
   landing: {
     approach: "The approach", disciplines: "The disciplines", eyebrow: "PURPOSE. CONSISTENCY. PROGRESS.",
@@ -93,7 +93,7 @@ const es: Messages = {
     signIn: "Iniciar sesión", createAccount: "Crear cuenta", openWorkspace: "Ir a mi espacio", home: "Inicio",
     language: "Idioma", skip: "Saltar al contenido", dark: "Usar tema oscuro", light: "Usar tema claro",
     tagline: "Para progresar a largo plazo.", workspace: "Mi espacio", athlete: "Atleta", phase: "Fase",
-    backHome: "Volver al inicio", loading: "Un momento…", retry: "Intentar de nuevo", ai: "IA",
+    backHome: "Volver al inicio", loading: "Un momento…", retry: "Intentar de nuevo",
   },
   landing: {
     approach: "El enfoque", disciplines: "Las disciplinas", eyebrow: "PROPÓSITO. CONSTANCIA. PROGRESO.",

@@ -485,3 +485,6 @@ order by tablename;
 ```
 
 Then test signup, email confirmation, sign-in and Profile access in AthleteOS. The transactional isolation test in `supabase/tests/isolation.sql` creates temporary Auth fixtures and rolls them back; run it only in a disposable development/staging database.
+# Coach personalization follow-up
+
+Migration `202611140003_coach_preferences.sql` adds `coach_preferences` (18 public RLS tables and 190 application columns after all current migrations). Columns: `athlete_id uuid` (primary key, references profiles), `focus text`, `goal text` (maximum 1000 characters), `coaching_style text`, and `setup_completed_at`, `created_at`, `updated_at` as timestamptz. Required focus values are balanced, weightlifting, strength, conditioning or gymnastics; style values are concise, detailed or balanced. Reads are owner-only; writes go through the authenticated `save_coach_preferences(jsonb)` RPC with server-derived ownership and optimistic version checks. See [coach experience verification](COACH-EXPERIENCE-REVIEW.md).

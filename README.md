@@ -4,6 +4,8 @@ AthleteOS now includes Phase 2: editable athlete onboarding, an exercise library
 
 See the [Phase 2 implementation and verification report](docs/PHASE-2-REVIEW.md) for workflows and database changes.
 
+Phase 3 coach personalization: `/coach` now has a welcome screen, profile review, training focus and coaching-style setup, with private preferences saved in Supabase. See the [coach experience review](docs/COACH-EXPERIENCE-REVIEW.md). Conversations and the user-supplied core prompt are the next step.
+
 The [session creator](docs/SESSION-CREATOR-REVIEW.md) supports independent, collapsible workout blocks. The [session logging page](docs/SESSION-LOGGING-REVIEW.md) saves each block separately, adapts WOD scores to their format, and preserves earlier results when corrected.
 
 See [architecture, schema decisions, acceptance criteria and phased plan](docs/IMPLEMENTATION.md).
@@ -34,7 +36,7 @@ Required variables:
 | `NEXT_PUBLIC_SUPABASE_URL` | Your local or hosted Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase publishable key (legacy anon key also works) |
 
-There is no OpenAI runtime dependency or required AI key in Phase 1. Future `OPENAI_API_KEY` and model settings must remain server-only.
+Phase 3 point 1 adds the server-only OpenAI adapter. Training features still work without AI configuration. Set `OPENAI_API_KEY` and `OPENAI_MODEL` in `.env.local`; never prefix AI secrets with `NEXT_PUBLIC_`. Run `npm run coach:check` for configuration validation or `npm run coach:check:live` for one billable synthetic connection test. See [OpenAI foundation setup and scope](docs/PHASE-3-OPENAI-FOUNDATION.md). Coach chat is a subsequent step.
 
 ## Database and authentication
 
@@ -48,7 +50,7 @@ supabase status
 
 `db reset` destroys data in the local development database. Use it only for a disposable local instance. Copy the displayed local API URL and publishable/anon key into `.env.local`. The local database is on port 54322, Studio on 54323, and the test email inbox on 54324.
 
-For a new hosted project, link with `supabase link --project-ref YOUR_PROJECT_REF`, inspect the migrations, then run `supabase db push`. The existing AthleteOS hosted project has all eleven migrations applied through SQL Editor. Before first using CLI migration management there, reconcile versions `202611110001`, `202611120001`, `202611120002`, `202611120003`, `202611120004`, `202611120005`, `202611120006`, `202611120007`, `202611130001`, `202611140001`, and `202611140002` with `supabase migration repair --status applied VERSION`; do not reapply them.
+For a new hosted project, link with `supabase link --project-ref YOUR_PROJECT_REF`, inspect the migrations, then run `supabase db push`. The existing AthleteOS hosted project has all twelve migrations applied through SQL Editor. Before first using CLI migration management there, reconcile versions `202611110001`, `202611120001`, `202611120002`, `202611120003`, `202611120004`, `202611120005`, `202611120006`, `202611120007`, `202611130001`, `202611140001`, `202611140002`, and `202611140003` with `supabase migration repair --status applied VERSION`; do not reapply them.
 
 Configure Supabase Auth:
 

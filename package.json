@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "coach:check": "node --experimental-strip-types --conditions=react-server scripts/check-openai.mjs",
+    "coach:check:live": "node --experimental-strip-types --conditions=react-server scripts/check-openai.mjs --live",
     "dev": "next dev --hostname 127.0.0.1",
     "build": "next build",
     "start": "next start --hostname 127.0.0.1",
@@ -14,10 +16,12 @@
     "test:e2e:configured": "playwright test --config=playwright.configured.config.ts"
   },
   "dependencies": {
+    "@next/env": "^16.4.6",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.80.0",
     "lucide-react": "^0.468.0",
     "next": "^16.0.0",
+    "openai": "^7.56.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "server-only": "^0.0.1",
@@ -35,8 +39,12 @@
     "typescript": "^5.9.0",
     "vitest": "^5.1.0"
   },
-  "engines": { "node": ">=22.16.0" },
+  "engines": {
+    "node": ">=22.16.0"
+  },
   "overrides": {
-    "@typescript-eslint/typescript-estree": { "minimatch": "^11.0.1" }
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "^11.0.1"
+    }
   }
 }

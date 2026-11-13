@@ -5,6 +5,7 @@ import "./training.css";
 import "./session-builder.css";
 import "./session-log.css";
 import "./progress.css";
+import "./coach.css";
 import { LocaleProvider } from "@/components/locale-provider";
 import { getLocale, getMessages } from "@/lib/i18n/server";
 export async function generateMetadata(): Promise<Metadata> {
