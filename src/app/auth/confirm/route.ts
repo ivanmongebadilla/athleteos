@@ -1,5 +1,6 @@
 import { type EmailOtpType } from "@supabase/supabase-js";
-import { type NextRequest, NextResponse } from "next/server";
+import { type NextRequest } from "next/server";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getSupabaseEnv } from "@/lib/env";
 
@@ -9,7 +10,7 @@ export async function GET(request: NextRequest) {
   if (getSupabaseEnv() && token && type === "email") {
     const supabase = await createClient();
     const { error } = await supabase.auth.verifyOtp({ token_hash: token, type: type as EmailOtpType });
-    if (!error) return NextResponse.redirect(new URL("/today", request.url));
+    if (!error) redirect("/today");
   }
-  return NextResponse.redirect(new URL("/login?error=confirmation", request.url));
+  redirect("/login?error=confirmation");
 }

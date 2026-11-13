@@ -20,9 +20,12 @@ begin
  if (select count(*) from public.profiles) <> 1 then raise exception 'Profile isolation failed'; end if;
  if (select count(*) from public.athlete_settings) <> 1 then raise exception 'Settings isolation failed'; end if;
  if (select count(*) from public.exercises) <> 1 then raise exception 'Exercise isolation failed'; end if;
- update public.profiles set name = 'Intruder' where id = '00000000-0000-4000-8000-000000000002';
- get diagnostics affected = row_count;
- if affected <> 0 then raise exception 'Cross-user update succeeded'; end if;
+ begin
+  update public.profiles set name = 'Intruder' where id = '00000000-0000-4000-8000-000000000002';
+  get diagnostics affected = row_count;
+  if affected <> 0 then raise exception 'Cross-user update succeeded'; end if;
+ exception when insufficient_privilege then null; -- Phase 2 routes profile writes through its owned RPC.
+ end;
  begin
    insert into public.exercises (athlete_id, name, discipline) values ('00000000-0000-4000-8000-000000000002','Intrusion','strength');
    raise exception 'Cross-user insert succeeded';

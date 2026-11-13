@@ -1,49 +1,31 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, ArrowUpRight, CalendarDays, ChartNoAxesCombined, CircleUserRound, Dumbbell, Sparkles, Sun, Moon } from "lucide-react";
-import { useEffect, useSyncExternalStore } from "react";
-function readTheme() {
-  const saved = localStorage.getItem("athlete-theme");
-  return saved === "dark" || (!saved && matchMedia("(prefers-color-scheme: dark)").matches);
-}
-function subscribeTheme(callback: () => void) {
-  const media = matchMedia("(prefers-color-scheme: dark)");
-  window.addEventListener("storage", callback);
-  window.addEventListener("athlete-theme-change", callback);
-  media.addEventListener("change", callback);
-  return () => {
-    window.removeEventListener("storage", callback);
-    window.removeEventListener("athlete-theme-change", callback);
-    media.removeEventListener("change", callback);
-  };
-}
-const navigation = [
-  { href: "/today", label: "Today", icon: Activity },
-  { href: "/calendar", label: "Calendar", icon: CalendarDays },
-  { href: "/coach", label: "Coach AI", icon: Sparkles },
-  { href: "/progress", label: "Progress", icon: ChartNoAxesCombined },
-  { href: "/profile", label: "Profile", icon: CircleUserRound },
-];
-export function Shell({ children, setup = false }: { children: React.ReactNode; setup?: boolean }) {
+import { Activity, CalendarDays, ChartNoAxesCombined, CircleUserRound, Sparkles } from "lucide-react";
+import { Brand } from "./brand";
+import { LanguageSwitcher } from "./language-switcher";
+import { ThemeToggle } from "./theme-toggle";
+import { useLocale } from "./locale-provider";
+
+// Identity is supplied only by the server-verified athlete layout.
+export function Shell({ children, athlete }: { children: React.ReactNode; athlete: { name: string; initials: string } }) {
   const path = usePathname();
-  const dark = useSyncExternalStore(subscribeTheme, readTheme, () => false);
-  useEffect(() => {
-    document.documentElement.dataset.theme = dark ? "dark" : "light";
-  }, [dark]);
-  function toggleTheme() {
-    localStorage.setItem("athlete-theme", dark ? "light" : "dark");
-    window.dispatchEvent(new Event("athlete-theme-change"));
-  }
+  const { t } = useLocale();
+  const activePath = path.startsWith("/sessions") ? "/calendar" : path;
+  const navigation = [
+    { href: "/today", label: t.shell.today, icon: Activity },
+    { href: "/calendar", label: t.shell.calendar, icon: CalendarDays },
+    { href: "/coach", label: t.shell.coach, icon: Sparkles },
+    { href: "/progress", label: t.shell.progress, icon: ChartNoAxesCombined },
+    { href: "/profile", label: t.shell.profile, icon: CircleUserRound },
+  ];
   return <div className="app-shell">
-    <a className="skip-link" href="#main">Skip to content</a>
-    <aside className="sidebar">
-      <Link href={setup ? "/setup" : "/today"} className="brand"><span className="brand-symbol"><Dumbbell size={23}/></span>Athlete<span className="brand-os">OS</span><span className="brand-dot"/></Link>
-      <div className="workspace-label">YOUR TRAINING SPACE</div>
-      <nav aria-label="Main navigation">{navigation.map(({href,label,icon: Icon}) => <Link key={href} href={href} aria-current={path === href ? "page" : undefined} className={`nav-link ${path === href ? "active" : ""}`}><Icon size={20}/><span>{label}</span>{label === "Coach AI" && <span className="ai-badge">AI</span>}</Link>)}</nav>
-      <div className="sidebar-bottom"><div className="phase-card"><span className="status-dot"/> FOUNDATION · PHASE 01<p>A stronger foundation.<br/>A better training journey.</p><Link href="/setup">Workspace setup <ArrowUpRight size={14}/></Link></div><div className="sidebar-footer"><span className="avatar">A</span><div><strong>Your athlete workspace</strong><small>{setup ? "Setup required" : "Personal account"}</small></div></div></div>
+    <a className="skip-link" href="#main">{t.common.skip}</a>
+    <aside className="sidebar"><Brand href="/today"/><div className="workspace-label">{t.shell.trainingSpace}</div>
+      <nav aria-label={t.shell.navigation}>{navigation.map(({href,label,icon: Icon}) => <Link key={href} href={href} aria-current={activePath === href ? "page" : undefined} className={`nav-link ${activePath === href ? "active" : ""}`}><Icon size={20}/><span>{label}</span>{href === "/coach" && <span className="ai-badge">{t.common.ai}</span>}</Link>)}</nav>
+      <div className="sidebar-bottom"><div className="sidebar-footer"><span className="avatar">{athlete.initials}</span><div><strong>{athlete.name}</strong><small>{t.shell.account}</small></div></div></div>
     </aside>
-    <div className="main-wrap"><header className="topbar"><span className="breadcrumb">Workspace <span>/</span> <strong>{setup ? "Getting started" : navigation.find(n => n.href === path)?.label ?? "Training"}</strong></span><div className="topbar-actions"><span className="private-label"><span className="status-dot"/> Personal workspace</span><button className="icon-button" onClick={toggleTheme} aria-label={dark ? "Use light theme" : "Use dark theme"}>{dark ? <Sun size={19}/> : <Moon size={19}/>}</button><span className="avatar small">A</span></div></header><main id="main">{children}</main><footer className="page-footer"><span>ATHLETEOS</span><span>Built for the long game.</span></footer></div>
-    <nav className="mobile-nav" aria-label="Mobile navigation">{navigation.map(({href,label,icon: Icon}) => <Link key={href} href={href} aria-current={path === href ? "page" : undefined}><Icon size={21}/><span>{label}</span></Link>)}</nav>
+    <div className="main-wrap"><header className="topbar"><span className="breadcrumb">{t.common.workspace}<span>/</span><strong>{navigation.find(n => n.href === activePath)?.label ?? t.shell.today}</strong></span><div className="topbar-actions"><LanguageSwitcher/><ThemeToggle/><Link href="/profile" className="avatar small" aria-label={t.shell.profile}>{athlete.initials}</Link></div></header><main id="main">{children}</main><footer className="page-footer"><span>ATHLETEOS</span><span>{t.common.tagline}</span></footer></div>
+    <nav className="mobile-nav" aria-label={t.shell.mobileNavigation}>{navigation.map(({href,label,icon: Icon}) => <Link key={href} href={href} aria-current={path === href ? "page" : undefined}><Icon size={21}/><span>{label}</span></Link>)}</nav>
   </div>;
 }

@@ -1,0 +1,44 @@
+import { expect,test } from "@playwright/test";
+import { openSavedSession } from "./helpers/saved-session";
+test.beforeEach(async ({ context,request })=>{
+  await request.post("http://127.0.0.1:54329/reset");
+  await request.post("http://127.0.0.1:54329/seed-catalog");
+  const encode=(value:unknown)=>Buffer.from(JSON.stringify(value)).toString("base64url");
+  const token=`${encode({alg:"HS256",typ:"JWT"})}.${encode({sub:"00000000-0000-4000-8000-000000000021",aud:"authenticated",role:"authenticated",exp:2208988800,iat:1735689600})}.${Buffer.alloc(32).toString("base64url")}`;
+  await context.addCookies([{name:"sb-127-auth-token",value:`base64-${encode({access_token:token,refresh_token:"local-fixture",token_type:"bearer",expires_in:3600,expires_at:2208988800})}`,domain:"127.0.0.1",path:"/"}]);
+});
+test("full bilingual catalog can be searched, prescribed and logged without creating exercises",async({page},info)=>{
+  await page.goto("/progress?tab=library");
+  await expect(page.getByRole("status").filter({hasText:"1379 exercises"})).toBeVisible();
+  await expect(page.locator(".exercise-row")).toHaveCount(40);
+  await page.getByLabel("Search exercises",{exact:true}).fill("C&J");
+  const row=page.locator(".exercise-row");
+  await expect(row).toHaveCount(1); await expect(row).toContainText("Clean and Jerk");
+  await expect(row.getByRole("button")).toHaveCount(0);
+  await row.getByText("View instructions",{exact:true}).click();
+  await expect(row).toContainText("Clean the barbell to the shoulders");
+  await page.getByRole("combobox",{name:"Language",exact:true}).selectOption("es");
+  await expect(row).toContainText("Dos tiempos"); await expect(row).toContainText("Carga la barra");
+  await page.goto("/sessions/new?date=2026-11-12");
+  await page.getByLabel("Título de la sesión",{exact:true}).fill("Catálogo compartido");
+  await page.getByRole("button",{name:"Fuerza",exact:true}).click();
+  await page.getByRole("button",{name:"Añadir movimiento",exact:true}).click();
+  const movement=page.locator(".builder-movement");
+  await movement.getByRole("searchbox",{name:"Buscar movimientos",exact:true}).fill("snatch");
+  const picker=movement.getByLabel("Movimiento",{exact:true});
+  await picker.selectOption({label:"Arranque"}); const selected=await picker.inputValue();
+  await page.getByRole("combobox",{name:"Idioma",exact:true}).selectOption("en");
+  const englishPicker=movement.getByLabel("Movement",{exact:true});
+  await expect(englishPicker).toHaveValue(selected); await expect(englishPicker.locator("option:checked")).toHaveText("Snatch");
+  await page.getByRole("checkbox",{name:"Publish session",exact:true}).check();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.screenshot({path:info.outputPath("catalog-session-picker.png"),fullPage:true});
+  await page.getByRole("button",{name:"Save & publish",exact:true}).click();
+  await openSavedSession(page,"Catálogo compartido");
+  await expect(page.locator(".section-log-form")).toHaveCount(1);
+  const actual=page.locator(".actual-row");
+  for(let i=0;i<3;i++){await actual.nth(i).getByLabel("Reps",{exact:true}).fill("3");await actual.nth(i).getByLabel("Load",{exact:true}).fill("40");}
+  await page.getByRole("button",{name:"Save Strength",exact:true}).click();
+  await page.reload(); await expect(page.locator(".log-session-info")).toContainText("Completed");
+  await expect(page.locator(".log-plan")).toContainText("Snatch");
+});

@@ -1,8 +1,6 @@
-import { requireAthlete } from "@/lib/supabase/session";
+import { getTrainingHome } from "@/modules/training/data";
+import { ProfileForm } from "@/modules/training/profile-form";
 import { signOut } from "@/modules/identity/actions";
-export default async function Profile({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const { user, supabase } = await requireAthlete();
-  const { data: profile, error } = await supabase.from("profiles").select("name, preferred_units").eq("id", user.id).single();
-  const params = await searchParams;
-  return <><div className="page-heading"><div><div className="eyebrow">YOUR ATHLETE WORKSPACE</div><h1>Your account<span className="accent">.</span></h1><p>The start of a more personal training experience.</p></div></div><section className="panel profile-panel"><h2>{profile?.name || "Athlete"}</h2><dl><dt>Email</dt><dd>{user.email}</dd><dt>Preferred units</dt><dd>{profile?.preferred_units ?? "Not available"}</dd><dt>Profile setup</dt><dd>Full athlete onboarding arrives in Phase 2.</dd></dl>{error && <p role="alert" className="form-error">Your profile could not be loaded. Check that the database migration has been applied.</p>}{params.error && <p role="alert" className="form-error">Sign-out failed. Please try again.</p>}<form action={signOut}><button className="button secondary" type="submit">Sign out</button></form></section></>;
-}
+import { getLocale, getMessages } from "@/lib/i18n/server";
+import { trainingMessages } from "@/modules/training/messages";
+export default async function Profile({ searchParams }: { searchParams: Promise<{ error?: string }> }) { const [{ profile, email }, locale, params, common] = await Promise.all([getTrainingHome(), getLocale(), searchParams, getMessages()]); const t = trainingMessages(locale); return <><ProfileForm profile={profile} /><section className="panel training-panel"><p>{email}</p>{params.error && <p role="alert">{common.profile.logoutError}</p>}<form action={signOut}><button className="button secondary">{t.signOut}</button></form></section></>; }

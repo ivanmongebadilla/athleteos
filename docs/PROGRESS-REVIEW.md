@@ -1,0 +1,18 @@
+# Progress dashboard
+
+`/progress` now opens an Overview dashboard based on the supplied desktop reference: streak/monthly stats, an eight-week consistency grid, recent lifting and benchmark PRs, a movement chart and benchmark time trends. Responsive layouts stack the cards on small screens. English/Spanish, light/dark themes, movement selection, repetition filters and accessible chart history are included.
+
+`/progress?tab=library` retains the existing exercise catalog, private exercise creation/archive, instructions and historical PR forms. Both tabs use the Progress heading and navigation label. The management link opens Library directly. Existing catalog and training browser tests now open that tab explicitly.
+
+Data comes from authenticated, athlete-scoped reads of existing Supabase sessions, workout results, completed sets and personal records. No migration, new permissions, service-role key or database mutation is needed for the overview. Stable pagination reads histories in batches of 500. The existing Library retains its documented 1,000-record display limit, while overview history is paginated separately. A missing/erroring history raises the existing error UI instead of silently displaying fake zeros.
+
+Calculation rules:
+
+- Session totals count completed sessions in the athlete's current local month. Logged training dates (including partial sessions) drive the 56-day grid and current streak. A streak can end yesterday until today is logged. Future training dates are excluded.
+- Only the latest revision of each section contributes to results. Successful weighted sets and historical PRs merge into daily best loads, with kg/lb conversion. Rep counts are compared separately; failed attempts and zero-load sets do not create lifting PRs. Same-day duplicate historical/logged records collapse into one daily best.
+- The chart shows actual daily bests for the selected movement and rep count. The large value is the latest training day's best, the caption gives the all-time best, and the comparison badge uses this month's best versus the previous calendar month's best. No comparison is fabricated when either month is missing.
+- Benchmark recognition requires an explicit benchmark name in the session title or at the start of WOD instructions (Fran, Grace, Helen, Isabel, Diane, Elizabeth, Annie, Karen, Jackie, Nancy, Amanda or Murph). Only finished For Time conditioning results qualify. Names/title variants, written and structured prescriptions, and RX/scaled groups remain separate. Trends link back to the actual session. Faster-than-prior-best benchmark results appear in recent PRs and monthly PR counts. A first recorded best counts as a PR baseline; an unchanged/worse result does not.
+
+Validation: 36 unit tests passed, including revised-result deduplication, date/streak boundaries, unit conversion, rep separation, duplicate records, benchmark grouping and benchmark PRs. Ten desktop/mobile browser checks passed for the dashboard, catalog and existing training flow. After the final chart/hydration and PR changes, all four dashboard checks passed again, asserting no page/hydration errors. They cover populated/empty states, movement switching, real record persistence, tab navigation, English/Spanish, themes and horizontal overflow. All browser fixtures are local synthetic data. Anonymous hosted API access remains denied as expected; no real athlete data was modified for testing.
+
+Screenshots in `docs/screenshots/progress-overview-desktop.png`, `progress-overview-mobile.png` and `progress-overview-dark.png` use synthetic test sessions and PRs. No production build or deployment was performed.

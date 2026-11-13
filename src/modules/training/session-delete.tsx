@@ -1,0 +1,20 @@
+"use client";
+import { useId,useRef,useState,useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Trash2 } from "lucide-react";
+import { useLocale } from "@/components/locale-provider";
+import { deleteSession,restoreSession } from "./actions";
+
+export function DeleteSession({ id,title,version,compact=false }: { id:string; title:string; version:string|null; compact?:boolean }) {
+  const {locale}=useLocale(); const es=locale==="es"; const router=useRouter(); const dialog=useRef<HTMLDialogElement>(null); const cancel=useRef<HTMLButtonElement>(null); const label=useId(); const [error,setError]=useState(false); const [pending,startTransition]=useTransition();
+  return <><button type="button" className={`button session-delete-trigger${compact?" session-card-delete":""}`} aria-label={compact?`${es?"Eliminar sesión":"Delete session"}: ${title}`:undefined} title={compact?(es?"Eliminar sesión":"Delete session"):undefined} aria-haspopup="dialog" onClick={()=>{setError(false);dialog.current?.showModal();cancel.current?.focus();}}><Trash2 size={16} aria-hidden="true"/>{!compact&&(es?"Eliminar sesión":"Delete session")}</button>
+    <dialog ref={dialog} className="session-delete-dialog" aria-labelledby={`${label}-title`} aria-describedby={`${label}-session ${label}-body`} aria-busy={pending} onCancel={event=>{if(pending)event.preventDefault();}} onKeyDown={event=>{if(event.key!=="Tab")return;const buttons=Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"));const first=buttons[0],last=buttons.at(-1);if(!first){event.preventDefault();return;}if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}}>
+      <h2 id={`${label}-title`}>{es?"¿Eliminar esta sesión?":"Delete this session?"}</h2><p id={`${label}-session`} className="delete-session-name">{title}</p><p id={`${label}-body`}>{es?"La sesión desaparecerá de Hoy y del calendario. Podrás deshacer la eliminación al volver a Hoy. Las sesiones completadas o con resultados registrados no se pueden eliminar.":"This session will be removed from Today and Calendar. You can undo the deletion when you return to Today. Completed sessions and sessions with logged results cannot be deleted."}</p>
+      {error&&<p role="alert" className="form-error">{es?"No se pudo eliminar la sesión. Puede haber cambiado o tener resultados registrados. Recarga la página para comprobar su estado.":"Could not delete the session. It may have changed or have logged results. Reload the page to check its status."}</p>}
+      <div className="training-actions"><button ref={cancel} type="button" className="button secondary" disabled={pending} onClick={()=>dialog.current?.close()}>{es?"Cancelar":"Cancel"}</button><button type="button" className="button session-delete-confirm" disabled={pending} onClick={()=>startTransition(async()=>{setError(false);try{const result=await deleteSession({id,expected_updated_at:version});if(result.ok)router.replace(`/today?deleted=${id}`);else setError(true);}catch{setError(true);}})}>{pending?es?"Eliminando…":"Deleting…":es?"Eliminar sesión":"Delete session"}</button></div>
+    </dialog></>;
+}
+export function UndoSessionDelete({ id }: { id:string }) {
+  const {locale}=useLocale();const es=locale==="es";const router=useRouter();const [pending,startTransition]=useTransition();const [error,setError]=useState(false);
+  return <section className="session-delete-notice" aria-label={es?"Sesión eliminada":"Session deleted"}><p role="status">{es?"Sesión eliminada.":"Session deleted."}</p><button type="button" className="text-button" disabled={pending} onClick={()=>startTransition(async()=>{setError(false);try{const result=await restoreSession(id);if(result.ok)router.replace("/today");else setError(true);}catch{setError(true);}})}>{pending?es?"Restaurando…":"Restoring…":es?"Deshacer eliminación":"Undo delete"}</button>{error&&<p role="alert">{es?"No se pudo restaurar la sesión. Inténtalo de nuevo.":"Could not restore the session. Try again."}</p>}</section>;
+}

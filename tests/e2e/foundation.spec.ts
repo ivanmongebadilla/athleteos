@@ -1,8 +1,8 @@
 import { test, expect } from "@playwright/test";
 test("unconfigured workspace explains setup without inventing training data", async ({ page }, testInfo) => {
-  await page.goto("/");
+  await page.goto("/setup");
   await expect(page).toHaveURL(/\/setup$/);
-  await expect(page.getByRole("heading", { name: /Your next chapter/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /A connection comes first/ })).toBeVisible();
   await expect(page.getByText("Connection needed")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("setup-light.png"), fullPage: true });
@@ -28,5 +28,14 @@ test("login cannot submit when credentials are not configured", async ({ page })
 test("invalid email confirmation has a safe local destination", async ({ page }) => {
   await page.goto("/auth/confirm?type=email&next=https://evil.example");
   await expect(page).toHaveURL(/\/login\?error=confirmation$/);
-  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(page.getByRole("alert").filter({ hasText: "This confirmation link could not complete sign-in." })).toBeVisible();
+});
+test("default-template callback cannot redirect outside the app", async ({ page }) => {
+  await page.goto("/auth/callback?code=invalid&next=https://evil.example");
+  await expect(page).toHaveURL(/\/login\?error=confirmation$/);
+  await expect(page.getByRole("alert").filter({ hasText: "This confirmation link could not complete sign-in." })).toBeVisible();
+});
+test("default email landing forwards the code into the server callback", async ({ page }) => {
+  await page.goto("/?code=invalid&next=https://evil.example");
+  await expect(page).toHaveURL(/\/login\?error=confirmation$/);
 });

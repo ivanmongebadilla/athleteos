@@ -1,0 +1,11 @@
+"use client";
+import type { AthleteProfile } from "./types";
+import { saveProfile } from "./actions";
+import { Field, Heading, MutationForm, useTrainingMessages, numberValue } from "./ui";
+export function ProfileForm({ profile }: { profile: AthleteProfile }) {
+  const t = useTrainingMessages();
+  return <><Heading title={t.profile} /><section className="panel training-panel"><p>{t.comma}</p><MutationForm onSave={async data => {
+    const split = (name: string) => String(data.get(name) ?? "").split(",").map(value => value.trim()).filter(Boolean);
+    return saveProfile({ name: data.get("name"), preferred_units: data.get("preferred_units"), experience: data.get("experience"), training_days_per_week: numberValue(data, "training_days_per_week"), available_minutes: numberValue(data, "available_minutes"), timezone: data.get("timezone"), primary_goals: split("primary_goals"), secondary_goals: split("secondary_goals"), limitations: split("limitations"), equipment: split("equipment"), disciplines: split("disciplines") });
+  }}><div className="training-grid"><Field label={t.name}><input name="name" defaultValue={profile.name} maxLength={120} required autoComplete="name" /></Field><Field label={t.units}><select name="preferred_units" defaultValue={profile.preferred_units}><option>lb</option><option>kg</option></select></Field><Field label={t.experience}><select name="experience" defaultValue={profile.experience}>{(["beginner", "intermediate", "advanced"] as const).map(value => <option key={value} value={value}>{t[value]}</option>)}</select></Field><Field label={t.training_days_per_week}><input type="number" name="training_days_per_week" min={1} max={7} defaultValue={profile.training_days_per_week} required /></Field><Field label={t.available_minutes}><input type="number" name="available_minutes" min={10} max={300} defaultValue={profile.available_minutes} required /></Field><Field label={t.timezone}><input name="timezone" defaultValue={profile.timezone} placeholder="America/Tijuana" maxLength={100} required /></Field>{(["primary_goals", "secondary_goals", "limitations", "equipment", "disciplines"] as const).map(key => <Field key={key} label={t[key]}><textarea name={key} defaultValue={profile[key].join(", ")} maxLength={2000} rows={2} /></Field>)}</div></MutationForm></section></>;
+}

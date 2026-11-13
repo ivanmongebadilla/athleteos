@@ -1,4 +1,5 @@
--- Phase 1: normalized schema. Apply using Supabase migrations, never from the browser.
+-- Phase 1: normalized schema. Apply through authenticated Supabase CLI or SQL Editor.
+-- Never execute schema changes from the AthleteOS application client.
 begin;
 create extension if not exists pgcrypto;
 create function public.touch_updated_at() returns trigger
