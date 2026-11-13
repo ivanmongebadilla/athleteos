@@ -225,6 +225,10 @@ Ordered warm-up, lifting, strength, gymnastics, conditioning, accessories and co
 | `kind` | `text` | Yes | `not null check (kind in ('warmup','weightlifting','strength','gymnastics','conditioning','accessories','cooldown'))` |
 | `format` | `text` | No | `check (format in ('for_time','amrap','emom','intervals','tabata','custom'))` |
 | `time_cap_seconds` | `integer` | No | `check (time_cap_seconds > 0)` |
+| `interval_rounds` | `integer` | No | 1–1440, Intervals, Tabata or EMOM; Tabata RPC accepts 1–50 |
+| `emom_interval_seconds` | `integer` | No | 1–86400; EMOM only; interval × rounds is the total duration (maximum 86400 seconds via RPC) |
+| `tabata_work_seconds` | `integer` | No | 5–300; paired with rest, Tabata only; existing Tabata backfilled to 20 |
+| `tabata_rest_seconds` | `integer` | No | 5–300; paired with work, Tabata only; existing Tabata backfilled to 10 |
 | `instructions` | `text` | No | — |
 | `created_at` | `timestamptz` | Yes | `not null default now()` |
 | `updated_at` | `timestamptz` | Yes | `not null default now()` |

@@ -1,0 +1,22 @@
+> Update: `202611140001_tabata_configurable.sql` has now been applied to the hosted project. It supersedes the fixed Tabata protocol described below: the session RPC accepts 1–50 rounds and 5–300 seconds each for work/rest, and computes total duration. Both new columns were verified and the one pre-existing Tabata section was backfilled to 20/10. Lowest-round scoring is preserved. Five rollback-only SQL suites passed, including configurable timing and invalid-score checks. The schema now has 182 columns; README lists ten manually applied migration versions. No production build was run.
+
+# Format-specific WOD scoring
+
+The creator and logger distinguish workout duration, elapsed time and numeric round scores. For Time keeps its optional cap, elapsed MM:SS and DNF flag. AMRAP/EMOM plan fields now say Duration rather than Time cap. AMRAP keeps rounds plus extra reps; EMOM retains its existing per-minute completion checklist.
+
+Intervals has a prescribed round count (default 5; creator range 1–50, database range 1–1440), optional informational total duration, and one numeric input per stored round. Results retain the numeric array and its sum. Tabata fixes new prescriptions at eight rounds and 240 seconds, displays 20 seconds work / 10 seconds rest, records eight rep counts and shows their live minimum as the official score. Blank rounds cannot be saved; zero is valid. Desktop uses four score columns and phones use two. English and Spanish copy, saved-value reload and revision history are included. Custom scoring remains flexible.
+
+Migration `202611130001_wod_round_scores.sql` was rollback-tested and applied to the existing connected Supabase project. It adds `workout_sections.interval_rounds`, updates the private session writer and the public per-section logger, and preserves session locking, ownership, stale-version checks, soft-delete exclusion and append-only results. No service-role key or broader API permissions are introduced. The schema remains 17 public RLS tables and six API functions, now with 180 columns.
+
+Database validation restricts `score_details.intervals` to boolean arrays on EMOM. `interval_scores` accepts only non-negative integers up to 100,000 each, on Intervals/Tabata. The array length must equal the prescribed count (exactly eight for Tabata), stored rounds must match its length, and stored score must match the sum for Intervals or minimum for Tabata. Totals can reach 144,000,000 without truncation. The older whole-session writer rejects numeric-round formats so callers cannot bypass the per-section rules.
+
+Existing result rows are not rewritten. Where an old Intervals result has completion flags, the migration can recover the known count from its array, while preserving the original flags as historical data. Old Tabata sections receive eight-round metadata. New numeric entries are appended as corrections rather than interpreting completion flags as rep counts. An older unconfigured Intervals plan requires its coach to set a round count before logging; the hosted audit found zero such plans. Existing historical Tabata cap values are preserved; new saves normalize their fixed four-minute structure.
+
+Verification:
+
+- Expanded rollback-only `section_logging.sql` checks numeric arrays, invalid booleans/nulls/fractions/negative/out-of-range scores, wrong lengths/formats/aggregates, plan persistence, Tabata zero minimum, numeric revision preservation and legacy-writer bypass denial, alongside existing EMOM/ownership/stale/history checks.
+- The hosted core-training, section-logging, shared-catalog and session-deletion SQL suites passed after the migration. Read-only scoring verification reports all guards installed, no private helper exposure, valid stored counts and zero temporary test users.
+- All 38 unit tests passed. Eighteen existing editor/logging/training desktop/mobile workflows passed in the broad development run; after correcting Tabata copy and desktop grid sizing, all eight focused WOD workflows passed. Browser data is isolated synthetic HTTP fixture data, not real athlete history.
+- Final lint and TypeScript checks run separately. Screenshots show synthetic Intervals and Tabata workflows; hosted verification is saved as `docs/screenshots/supabase-wod-scoring-verified.png`.
+
+All nine migration versions in README must be reconciled before switching this manually managed hosted project to CLI migrations. No production build or deployment was performed; the development preview continues on port 3000.

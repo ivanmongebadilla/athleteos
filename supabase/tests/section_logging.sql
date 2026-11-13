@@ -49,11 +49,72 @@ begin
   if not exists(select 1 from public.workout_results where id=(saved->>'id')::uuid and score_details='{"intervals":[true,false,true]}'::jsonb and rounds=2) then raise exception 'Interval details lost'; end if;
   begin update public.workout_results set notes='Rewrite'; raise exception 'History mutable'; exception when insufficient_privilege then null; end;
 end $$;
+-- Numeric-round formats must validate at the RPC boundary, not just in the UI.
+do $$
+declare plan jsonb; sid uuid; sec uuid; stamp timestamptz; payload jsonb; invalid jsonb; saved jsonb; first_id uuid; failed boolean; format_name text;
+begin
+ plan:='{"id":null,"expected_updated_at":null,"title":"Numeric rounds fixture","scheduled_on":"2026-11-13","status":"scheduled","intensity":"moderate","duration_minutes":60,"notes":"","published":true,"sections":[{"kind":"conditioning","format":"intervals","interval_rounds":5,"time_cap_seconds":null,"instructions":"5 rounds, score reps","exercises":[]}]}';
+ for invalid in select value from jsonb_array_elements('[null,0,-1,1.5,1441,"5",true]'::jsonb) loop
+  failed:=false;begin perform public.save_training_session(jsonb_set(plan,'{sections,0,interval_rounds}',invalid));exception when others then failed:=true;end;
+  if not failed then raise exception 'Invalid plan rounds accepted: %',invalid;end if;
+ end loop;
+ sid:=public.save_training_session(plan);
+ select updated_at into stamp from public.training_sessions where id=sid;
+ select id into sec from public.workout_sections where session_id=sid;
+ if (select interval_rounds from public.workout_sections where id=sec)<>5 then raise exception 'Plan round count lost';end if;
+ -- Editing an unlogged plan must retain the round count as well.
+ perform public.save_training_session(plan||jsonb_build_object('id',sid,'expected_updated_at',stamp));
+ select updated_at into stamp from public.training_sessions where id=sid;
+ select id into sec from public.workout_sections where session_id=sid;
+ payload:=jsonb_build_object('session_id',sid,'expected_updated_at',stamp,'expected_result_id',null,'result',jsonb_build_object('section_id',sec,'completion_seconds',null,'rounds',5,'repetitions',50,'scaled',false,'session_rpe',null,'notes','','score_details','{"interval_scores":[10,12,8,11,9]}'::jsonb,'sets','[]'::jsonb));
+ for invalid in select value from jsonb_array_elements('[[true,false,true,false,true],[1,-1,2,3,4],[1,1.5,2,3,4],[null,1,2,3,4],[100001,1,2,3,4],[10,12,8,11],[],"bad"]'::jsonb) loop
+  failed:=false;begin perform public.save_workout_section(jsonb_set(payload,'{result,score_details,interval_scores}',invalid));exception when others then failed:=true;end;
+  if not failed then raise exception 'Invalid numeric array accepted: %',invalid;end if;
+ end loop;
+ failed:=false;begin perform public.save_workout_section(jsonb_set(payload,'{result,score_details}','{"intervals":[true,true,true,true,true]}'));exception when others then failed:=true;end;
+ if not failed then raise exception 'Intervals accepted EMOM flags';end if;
+ failed:=false;begin perform public.save_workout_section(jsonb_set(payload,'{result,score_details}','{}'));exception when others then failed:=true;end;
+ if not failed then raise exception 'Intervals accepted missing round scores';end if;
+ failed:=false;begin perform public.save_workout_section(jsonb_set(payload,'{result,repetitions}','51'));exception when others then failed:=true;end;
+ if not failed then raise exception 'Wrong interval sum accepted';end if;
+ failed:=false;begin perform public.save_workout_section(jsonb_set(payload,'{result,rounds}','4'));exception when others then failed:=true;end;
+ if not failed then raise exception 'Wrong numeric round count accepted';end if;
+ failed:=false;begin perform public.complete_training_session(jsonb_build_object('session_id',sid,'expected_updated_at',stamp,'results',jsonb_build_array(payload->'result')));exception when others then failed:=true;end;
+ if not failed then raise exception 'Legacy writer bypassed numeric score validation';end if;
+ saved:=public.save_workout_section(payload);first_id:=(saved->>'id')::uuid;
+ if not exists(select 1 from public.workout_results where id=first_id and repetitions=50 and rounds=5 and score_details->'interval_scores'='[10,12,8,11,9]'::jsonb) then raise exception 'Numeric scores lost';end if;
+ payload:=jsonb_set(payload,'{result,score_details,interval_scores}','[11,12,8,11,9]')||jsonb_build_object('expected_result_id',first_id);
+ payload:=jsonb_set(payload,'{result,repetitions}','51');perform public.save_workout_section(payload);
+ if (select repetitions from public.workout_results where id=first_id)<>50 then raise exception 'Numeric correction rewrote history';end if;
+ -- Tabata's prescribed structure and lowest round are enforced, including zero.
+ plan:=jsonb_set(plan,'{sections,0,format}','"tabata"');
+ failed:=false;begin perform public.save_training_session(plan);exception when others then failed:=true;end;
+ if not failed then raise exception 'Tabata plan accepted missing work/rest';end if;
+ plan:=jsonb_set(jsonb_set(jsonb_set(plan,'{sections,0,interval_rounds}','8'),'{sections,0,tabata_work_seconds}','20'),'{sections,0,tabata_rest_seconds}','10');sid:=public.save_training_session(plan);
+ select updated_at into stamp from public.training_sessions where id=sid;
+ select id into sec from public.workout_sections where session_id=sid;
+ if not exists(select 1 from public.workout_sections where id=sec and interval_rounds=8 and time_cap_seconds=240) then raise exception 'Fixed Tabata plan lost';end if;
+ payload:=jsonb_build_object('session_id',sid,'expected_updated_at',stamp,'expected_result_id',null,'result',jsonb_build_object('section_id',sec,'completion_seconds',null,'rounds',8,'repetitions',0,'scaled',false,'session_rpe',null,'notes','','score_details','{"interval_scores":[12,11,10,9,8,7,6,0]}'::jsonb,'sets','[]'::jsonb));
+ failed:=false;begin perform public.save_workout_section(jsonb_set(payload,'{result,repetitions}','63'));exception when others then failed:=true;end;
+ if not failed then raise exception 'Tabata accepted sum instead of minimum';end if;
+ failed:=false;begin perform public.save_workout_section(jsonb_set(payload,'{result,score_details,interval_scores}','[12,11,10,9,8,7,0]'));exception when others then failed:=true;end;
+ if not failed then raise exception 'Tabata accepted seven rounds';end if;
+ saved:=public.save_workout_section(payload);
+ if not exists(select 1 from public.workout_results where id=(saved->>'id')::uuid and repetitions=0 and rounds=8) then raise exception 'Tabata zero minimum lost';end if;
+ -- Numeric metadata is forbidden on EMOM, For Time, AMRAP and custom blocks.
+ for format_name in select unnest(array['emom','for_time','amrap','custom']) loop
+  plan:=jsonb_set(plan,'{sections,0,format}',to_jsonb(format_name));plan:=jsonb_set(plan,'{sections,0,interval_rounds}','null');plan:=jsonb_set(jsonb_set(plan,'{sections,0,tabata_work_seconds}','null'),'{sections,0,tabata_rest_seconds}','null');sid:=public.save_training_session(plan);
+  select updated_at into stamp from public.training_sessions where id=sid;select id into sec from public.workout_sections where session_id=sid;
+  payload:=payload||jsonb_build_object('session_id',sid,'expected_updated_at',stamp);payload:=jsonb_set(payload,'{result,section_id}',to_jsonb(sec));
+  failed:=false;begin perform public.save_workout_section(payload);exception when others then failed:=true;end;
+  if not failed then raise exception 'Numeric scores accepted on %',format_name;end if;
+ end loop;
+end $$;
 reset role;
 set local role anon;
 do $$ begin
   begin perform public.save_workout_section('{}'); raise exception 'Anonymous section save allowed'; exception when insufficient_privilege then null; end;
 end $$;
 reset role;
-select 'Independent section saves, append-only corrections, immutable prescriptions, stale-save and ownership denial, completion and EMOM persistence passed' as verification;
+select 'Independent section saves, append-only corrections, immutable prescriptions, stale-save and ownership denial, completion, EMOM persistence and numeric Intervals/Tabata validation passed' as verification;
 rollback;

@@ -10,7 +10,7 @@ async function seed(request: APIRequestContext, format: string, strength = false
   const base = "http://127.0.0.1:54329/rest/v1";
   await request.post(`${base}/exercises`, { data: { name: "Back Squat", discipline: "strength", archived: false } });
   const exercises = await (await request.get(`${base}/exercises`)).json();
-  const sections: SectionInput[] = [{ kind: "conditioning", format: format as SectionInput["format"], time_cap_seconds: 180, instructions: "21-15-9 · Thrusters + Pull-ups", exercises: [] }];
+  const sections: SectionInput[] = [{ kind: "conditioning", format: format as SectionInput["format"], time_cap_seconds: 180, interval_rounds: format === "intervals" ? 3 : format === "tabata" ? 8 : null, instructions: "21-15-9 · Thrusters + Pull-ups", exercises: [] }];
   if (strength) sections.unshift({ kind: "strength", format: null, time_cap_seconds: null, instructions: "Back Squat 2 × 3", exercises: [{ exercise_id: exercises[0].id, notes: "", sets: [1, 2].map(() => ({ repetitions: 3, load: 185, unit: "lb", percentage: null, target_rpe: 8, rest_seconds: 120 })) }] });
   return (await request.post(`${base}/rpc/save_training_session`, { data: { payload: { id: null, title: "CrossFit 6:00 AM", scheduled_on: "2026-11-12", status: "scheduled", intensity: "moderate", duration_minutes: 60, notes: "", published: true, sections } } })).json() as Promise<string>;
 }
@@ -61,15 +61,41 @@ test("Spanish AMRAP exposes rounds and extra reps rather than a time-only form",
   await expect(page.getByLabel("Repeticiones extra", { exact: true })).toHaveValue("12");
   await expect(page.getByRole("button", { name: "Escalado", exact: true })).toHaveAttribute("aria-pressed", "true");
 });
-test("EMOM stores a per-minute checklist and restores it on reload", async ({ page, request }) => {
+test("EMOM stores prescribed round completion and restores it on reload", async ({ page, request }) => {
   const id = await seed(request, "emom");
   await page.goto(`/sessions/${id}`);
-  await page.getByLabel("Interval 1", { exact: true }).check();
-  await page.getByLabel("Interval 3", { exact: true }).check();
+  await page.getByLabel("Round 1", { exact: true }).check();
+  await page.getByLabel("Round 3", { exact: true }).check();
   await page.getByRole("button", { name: "Save WOD", exact: true }).click();
   await expect(page.locator(".log-save-state")).toHaveText("Completed", { timeout: 15000 });
   await page.reload();
-  await expect(page.getByLabel("Interval 1", { exact: true })).toBeChecked();
-  await expect(page.getByLabel("Interval 2", { exact: true })).not.toBeChecked();
-  await expect(page.getByLabel("Interval 3", { exact: true })).toBeChecked();
+  await expect(page.getByLabel("Round 1", { exact: true })).toBeChecked();
+  await expect(page.getByLabel("Round 2", { exact: true })).not.toBeChecked();
+  await expect(page.getByLabel("Round 3", { exact: true })).toBeChecked();
+});
+
+test("Intervals use the prescribed round count and preserve numeric corrections",async({page,request},info)=>{
+  const id=await seed(request,"intervals");await page.goto(`/sessions/${id}`);
+  await expect(page.getByRole("checkbox",{name:/Interval \d/})).toHaveCount(0);
+  await expect(page.getByLabel("Number of minutes / intervals",{exact:true})).toHaveCount(0);
+  const save=page.getByRole("button",{name:"Save WOD",exact:true});await expect(save).toBeDisabled();
+  for(const [index,value] of [10,0,12].entries())await page.getByLabel(`Round ${index+1}`,{exact:true}).fill(String(value));
+  await expect(page.locator(".round-score-summary")).toContainText("Total score: 22");await save.click();await expect(page.locator(".log-save-state")).toHaveText("Completed");
+  await page.reload();await expect(page.getByLabel("Round 2",{exact:true})).toHaveValue("0");
+  await page.getByLabel("Round 2",{exact:true}).fill("4");await page.getByRole("button",{name:"Update WOD",exact:true}).click();
+  await expect(page.locator(".log-history summary")).toContainText("Previous entries (1)");await page.locator(".log-history summary").click();await expect(page.locator(".log-history")).toContainText("10 · 0 · 12");
+  const row=await(await request.get(`http://127.0.0.1:54329/rest/v1/training_sessions?id=eq.${id}`)).json();expect(row.workout_results.at(-1).score_details.interval_scores).toEqual([10,4,12]);expect(row.workout_results.at(-1).repetitions).toBe(26);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:info.outputPath("intervals-numeric.png"),fullPage:true});
+});
+
+test("Tabata has eight numeric rounds and saves the lowest round including zero",async({page,request},info)=>{
+  const id=await seed(request,"tabata");await page.goto(`/sessions/${id}`);
+  await expect(page.getByText("8 rounds · 20s work / 10s rest (4:00 total)",{exact:true})).toBeVisible();
+  await expect(page.locator(".round-score-grid input")).toHaveCount(8);const save=page.getByRole("button",{name:"Save WOD",exact:true});
+  for(const [index,value] of [12,11,10,9,8,7,6].entries())await page.getByLabel(`Round ${index+1}`,{exact:true}).fill(String(value));
+  await expect(save).toBeDisabled();await page.getByLabel("Round 8",{exact:true}).fill("0");await expect(page.locator(".round-score-summary")).toContainText("Tabata score: 0 reps (lowest round)");
+  await save.click();await expect(page.locator(".log-save-state")).toHaveText("Completed");await page.reload();await expect(page.getByLabel("Round 8",{exact:true})).toHaveValue("0");
+  const row=await(await request.get(`http://127.0.0.1:54329/rest/v1/training_sessions?id=eq.${id}`)).json();expect(row.workout_results.at(-1).repetitions).toBe(0);expect(row.workout_results.at(-1).rounds).toBe(8);
+  await page.getByRole("combobox",{name:"Language",exact:true}).selectOption("es");await expect(page.getByLabel("Ronda 1",{exact:true})).toHaveValue("12");await expect(page.locator(".round-score-summary")).toContainText("Puntuación Tabata: 0");
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:info.outputPath("tabata-numeric-es.png"),fullPage:true});
 });

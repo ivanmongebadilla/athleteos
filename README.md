@@ -48,7 +48,7 @@ supabase status
 
 `db reset` destroys data in the local development database. Use it only for a disposable local instance. Copy the displayed local API URL and publishable/anon key into `.env.local`. The local database is on port 54322, Studio on 54323, and the test email inbox on 54324.
 
-For a new hosted project, link with `supabase link --project-ref YOUR_PROJECT_REF`, inspect the migrations, then run `supabase db push`. The existing AthleteOS hosted project has all eight migrations applied through SQL Editor. Before first using CLI migration management there, reconcile versions `202611110001`, `202611120001`, `202611120002`, `202611120003`, `202611120004`, `202611120005`, `202611120006`, and `202611120007` with `supabase migration repair --status applied VERSION`; do not reapply them.
+For a new hosted project, link with `supabase link --project-ref YOUR_PROJECT_REF`, inspect the migrations, then run `supabase db push`. The existing AthleteOS hosted project has all eleven migrations applied through SQL Editor. Before first using CLI migration management there, reconcile versions `202611110001`, `202611120001`, `202611120002`, `202611120003`, `202611120004`, `202611120005`, `202611120006`, `202611120007`, `202611130001`, `202611140001`, and `202611140002` with `supabase migration repair --status applied VERSION`; do not reapply them.
 
 Configure Supabase Auth:
 
@@ -105,3 +105,5 @@ Primary implementation references: [Next.js Proxy](https://nextjs.org/docs/app/g
 Shared exercise catalog: see [catalog coverage, provenance and verification](docs/EXERCISE-CATALOG-REVIEW.md). The catalog includes 1,379 exercises with English/Spanish names and instructions; custom exercises and athlete records remain private.
 
 Session deletion: see [confirmation, Undo and history-preservation details](docs/SESSION-DELETION-REVIEW.md).
+
+WOD scoring: see [format-specific creation, logging and migration notes](docs/WOD-SCORING-REVIEW.md).

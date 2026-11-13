@@ -4,8 +4,8 @@ import { Check, ChevronDown, Dumbbell, Flame, Layers3, Plus, Trash2, Wind, Zap }
 import { useLocale } from "@/components/locale-provider";
 import { saveSectionLog } from "./actions";
 import type { Exercise, StoredResult, StoredSection, StoredSession } from "./types";
-import { Field, MutationForm, numberValue, useTrainingMessages } from "./ui";
-import { formatClock, parseClock } from "./logging";
+import { Field, MutationForm, NumberField, numberValue, useTrainingMessages } from "./ui";
+import { formatClock, parseClock, roundScore } from "./logging";
 import { logMessages } from "./log-messages";
 import { exerciseLabel } from "./exercise-labels";
 
@@ -47,8 +47,13 @@ export function SectionLogger({ session, section, latest, history, exercises, un
   const [dnf, setDnf] = useState(latest?.score_details?.did_not_finish ?? false);
   const [done, setDone] = useState(() => !!latest?.notes && (latest.notes === doneNoteEn || latest.notes === doneNoteEs));
   const doneRef = useRef<HTMLInputElement>(null);
-  const intervalsFormat = section.format === "emom" || section.format === "intervals" || section.format === "tabata";
-  const [intervals, setIntervals] = useState<boolean[]>(latest?.score_details?.intervals ?? (section.format === "emom" && section.time_cap_seconds ? Array.from({ length: Math.ceil(section.time_cap_seconds / 60) }, () => false) : []));
+  const intervalsFormat = section.format === "emom";
+  const numericRounds = section.format === "intervals" || section.format === "tabata";
+  const roundCount = section.interval_rounds ?? 0;
+  const [scores, setScores] = useState<(number|null)[]>(() => Array.from({length:roundCount},(_,index)=>latest?.score_details?.interval_scores?.[index] ?? null));
+  const enteredScores = scores.filter((score): score is number => score !== null);
+  const liveScore = enteredScores.length ? roundScore(section.format, enteredScores) : null;
+  const [intervals, setIntervals] = useState<boolean[]>(section.format === "emom" ? Array.from({ length: section.interval_rounds ?? Math.ceil((section.time_cap_seconds ?? 0) / (section.emom_interval_seconds ?? 60)) }, (_, index) => latest?.score_details?.intervals?.[index] ?? false) : []);
   const prescribed = section.exercises.flatMap(movement => movement.sets.map(set => ({ exerciseId: movement.exercise_id, planned: set })));
   const sequence = useRef(0);
   const [rows, setRows] = useState<Row[]>(() => latest ? latest.sets.map((actual, index) => ({ key: `saved-${index}`, exerciseId: actual.exercise_id, actual, planned: prescribed[index]?.exerciseId === actual.exercise_id ? prescribed[index].planned : undefined })) : prescribed.map((row, index) => ({ ...row, key: `planned-${index}` })));
@@ -64,16 +69,16 @@ export function SectionLogger({ session, section, latest, history, exercises, un
   return <article className={`log-card workout-section ${complete ? "is-complete" : ""}`} aria-label={label} style={{ "--block-tint": blockTints[section.kind] } as CSSProperties}>
     <header className="log-card-header"><div><Icon size={16} style={{ color: blockAccents[section.kind] }} /><h2><button type="button" className="block-collapse-toggle" aria-expanded={!collapsed} aria-controls={bodyId} title={collapsed ? l.expand : l.collapse} onClick={() => setCollapsed(current => !current)}>{label}<ChevronDown size={16} /></button></h2>{section.format && <span className="log-format">{section.format === "custom" ? t.customFormat : t[section.format]}</span>}</div><span className={`log-save-state ${savedId && !dirty ? "is-saved" : ""}`} role="status">{savedId && !dirty && <Check size={13} />}{dirty ? l.changes : savedId ? t.completed : l.unsaved}</span></header>
     <div id={bodyId} hidden={collapsed}>
-    {(section.instructions || section.time_cap_seconds !== null) && <div className="log-prescription"><p className="preserve-lines">{section.instructions}</p>{section.time_cap_seconds !== null && <span>{l.cap}: {formatClock(section.time_cap_seconds)}</span>}</div>}
+    {(section.instructions || section.time_cap_seconds !== null) && <div className="log-prescription"><p className="preserve-lines">{section.instructions}</p>{section.format === "emom" && <span>{l.emomSummary(section.emom_interval_seconds ?? 60, section.interval_rounds ?? Math.ceil((section.time_cap_seconds ?? 0) / 60))}</span>}{section.format !== "tabata" && section.format !== "emom" && section.time_cap_seconds !== null && <span>{section.format === "amrap" || section.format === "intervals" ? l.duration : l.cap}: {formatClock(section.time_cap_seconds)}</span>}</div>}
     <div onChangeCapture={() => setDirty(true)}>
-      <MutationForm className="section-log-form" label={`${savedId ? l.update : l.save} ${label}`} onSave={async data => {
+      <MutationForm className="section-log-form" label={`${savedId ? l.update : l.save} ${label}`} disabled={numericRounds && (!roundCount || scores.some(score=>score===null))} onSave={async data => {
         const clock = parseClock(String(data.get(`${section.id}-time`) ?? ""));
         const enteredNotes = String(data.get(`${section.id}-notes`) ?? "");
         const markedDone = data.get(`${section.id}-done`) === "1";
         const result = await saveSectionLog({ session_id: session.id, expected_updated_at: session.expected_updated_at, expected_result_id: savedId, result: {
-          section_id: section.id, completion_seconds: clock, rounds: intervalsFormat && intervals.length ? intervals.filter(Boolean).length : numeric(data, "rounds"), repetitions: numeric(data, "reps"), scaled, session_rpe: numeric(data, "rpe"),
+          section_id: section.id, completion_seconds: clock, rounds: numericRounds ? roundCount : intervalsFormat && intervals.length ? intervals.filter(Boolean).length : numeric(data, "rounds"), repetitions: numericRounds ? liveScore : numeric(data, "reps"), scaled, session_rpe: numeric(data, "rpe"),
           notes: enteredNotes.trim() ? enteredNotes : markedDone ? l.completedNote : "",
-          score_details: { ...(intervalsFormat && intervals.length ? { intervals } : {}), ...(dnf ? { did_not_finish: true } : {}) },
+          score_details: { ...(numericRounds ? { interval_scores: scores } : {}), ...(intervalsFormat && intervals.length ? { intervals } : {}), ...(dnf ? { did_not_finish: true } : {}) },
           sets: rows.map((row, index) => ({ exercise_id: row.exerciseId, set_number: index + 1, repetitions: numberValue(data, `${row.key}-reps`), load: numberValue(data, `${row.key}-load`), unit: data.get(`${row.key}-unit`), rpe: numberValue(data, `${row.key}-rpe`), rest_seconds: numberValue(data, `${row.key}-rest`), successful: !data.has(`${row.key}-failed`), notes: String(data.get(`${row.key}-notes`) ?? "") })),
         } });
         if (result.ok && result.id) { setSavedId(result.id); setSavedAt(result.completed_at); setDirty(false); setDone(markedDone); }
@@ -87,23 +92,28 @@ export function SectionLogger({ session, section, latest, history, exercises, un
         </div>)}</div>}
         {!isWod && !rows.length && section.exercises.length > 0 && <p className="log-help">{l.noSets}</p>}
         {section.exercises.length > 0 && <div className="log-add-sets">{[...new Set(section.exercises.map(exercise => exercise.exercise_id))].map(id => <button key={id} type="button" className="text-button" disabled={rows.length >= 200} onClick={() => addRow(id)}><Plus size={13} /><span>{l.addSet}</span><span className="log-add-set-exercise">{name(id)}</span></button>)}</div>}
+        {numericRounds && <div className="numeric-rounds">
+          {section.format === "tabata" && <p className="tabata-prescription">{l.tabataSummary(roundCount, section.tabata_work_seconds ?? 20, section.tabata_rest_seconds ?? 10)}</p>}
+          {latest?.score_details?.intervals && <p className="log-help">{l.legacyScore}</p>}
+          {!roundCount ? <p role="alert">{l.missingRounds}</p> : <><p>{section.format === "tabata" ? l.tabataHint : l.roundScoreHint}</p><div className="round-score-grid">{scores.map((score,index)=><NumberField key={index} label={`${l.round} ${index+1}`} value={score} min={0} max={100000} required onChange={value=>{setScores(current=>current.map((row,at)=>at===index?value:row));setDirty(true);}}/>)}</div><output className="round-score-summary" aria-live="polite">{section.format === "tabata" ? l.tabataScore : l.totalScore}: <strong>{liveScore ?? "—"}</strong>{section.format === "tabata" && ` ${t.reps.toLowerCase()} (${l.lowest})`}<small>{enteredScores.length} / {roundCount}</small></output></>}
+        </div>}
         {hasScore && <div className="wod-score"><div className="wod-score-fields">
           {(section.format === "for_time" || section.format === "custom" || !section.format) && <ClockInput name={`${section.id}-time`} label={l.time} required={section.format === "for_time" && !dnf} defaultSeconds={latest?.completion_seconds ?? null} />}
           {section.format === "amrap" && <><Field label={l.completeRounds}><input type="number" name={`${section.id}-rounds`} min={0} max={100000} required defaultValue={latest?.rounds ?? ""} /></Field><Field label={l.extraReps}><input type="number" name={`${section.id}-reps`} min={0} max={100000} defaultValue={latest?.repetitions ?? ""} /></Field></>}
-          {intervalsFormat && <Field label={l.intervalCount}><input type="number" min={0} max={1440} value={intervals.length} onChange={event => { const count = Math.max(0, Math.min(1440, Number(event.target.value) || 0)); setIntervals(current => Array.from({ length: count }, (_, index) => current[index] ?? false)); setDirty(true); }} /></Field>}
+
           <div className="score-category" role="group" aria-label={l.category}><button type="button" aria-pressed={!scaled} onClick={() => { setScaled(false); setDirty(true); }}>{l.rx}</button><button type="button" aria-pressed={scaled} onClick={() => { setScaled(true); setDirty(true); }}>{l.scaled}</button></div><Field label={t.notes}><input name={`${section.id}-notes`} defaultValue={latest?.notes ?? ""} maxLength={2000} /></Field>
-        </div>{intervalsFormat && intervals.length > 0 && <><p className="log-help">{l.intervalHint}</p><div className="interval-checklist">{intervals.map((checked, index) => <label key={index}><input type="checkbox" checked={checked} onChange={event => { setIntervals(current => current.map((value, at) => at === index ? event.target.checked : value)); setDirty(true); }} /><span>{l.interval} {index + 1}</span></label>)}</div></>}{section.format === "for_time" && <label className="training-check"><input type="checkbox" checked={dnf} onChange={event => { setDnf(event.target.checked); setDirty(true); }} />{l.dnf}</label>}</div>}
+        </div>{intervalsFormat && intervals.length > 0 && <><p className="log-help">{l.intervalHint}</p><div className="interval-checklist">{intervals.map((checked, index) => <label key={index}><input type="checkbox" checked={checked} onChange={event => { setIntervals(current => current.map((value, at) => at === index ? event.target.checked : value)); setDirty(true); }} /><span>{l.round} {index + 1}</span></label>)}</div></>}{section.format === "for_time" && <label className="training-check"><input type="checkbox" checked={dnf} onChange={event => { setDnf(event.target.checked); setDirty(true); }} />{l.dnf}</label>}</div>}
         {section.exercises.map((exercise, index) => exercise.notes && <p className="log-movement-note" key={index}><strong>{name(exercise.exercise_id)}</strong> · {exercise.notes}</p>)}
 
         <input ref={doneRef} type="hidden" name={`${section.id}-done`} defaultValue={done ? "1" : ""} />
         {!isWod && rows.length === 0 && (savedId && done && !dirty
           ? <div className="log-mark-done log-mark-done-complete"><Check size={14} />{t.completed}<button type="button" className="text-button" onClick={() => { setDone(false); if (doneRef.current) doneRef.current.value = ""; setDirty(true); }}>{l.editCompletion}</button></div>
           : <button type="submit" className="button lime log-mark-done-button" onClick={() => { if (doneRef.current) doneRef.current.value = "1"; setDone(true); }}>{l.markDone}</button>)}
-        <details className="log-extra"><summary>{l.options}</summary><div className="training-grid">{!hasScore && <Field label={t.notes}><textarea rows={1} name={`${section.id}-notes`} defaultValue={latest?.notes ?? ""} maxLength={2000} /></Field>}<Field label={t.rpe}><input type="number" name={`${section.id}-rpe`} min={1} max={10} step={0.1} defaultValue={latest?.session_rpe ?? ""} /></Field>{section.format !== "amrap" && <><Field label={l.completeRounds}><input type="number" name={`${section.id}-rounds`} min={0} max={100000} defaultValue={latest?.rounds ?? ""} disabled={intervalsFormat && intervals.length > 0} /></Field><Field label={l.extraReps}><input type="number" name={`${section.id}-reps`} min={0} max={100000} defaultValue={latest?.repetitions ?? ""} /></Field></>}{section.format !== "for_time" && section.format !== "custom" && section.format !== null && <ClockInput name={`${section.id}-time`} label={l.time} defaultSeconds={latest?.completion_seconds ?? null} />}</div></details>
+        <details className="log-extra"><summary>{l.options}</summary><div className="training-grid">{!hasScore && <Field label={t.notes}><textarea rows={1} name={`${section.id}-notes`} defaultValue={latest?.notes ?? ""} maxLength={2000} /></Field>}<Field label={t.rpe}><input type="number" name={`${section.id}-rpe`} min={1} max={10} step={0.1} defaultValue={latest?.session_rpe ?? ""} /></Field>{section.format !== "amrap" && !numericRounds && <><Field label={l.completeRounds}><input type="number" name={`${section.id}-rounds`} min={0} max={100000} defaultValue={latest?.rounds ?? ""} disabled={intervalsFormat && intervals.length > 0} /></Field><Field label={l.extraReps}><input type="number" name={`${section.id}-reps`} min={0} max={100000} defaultValue={latest?.repetitions ?? ""} /></Field></>}{!numericRounds && section.format !== "for_time" && section.format !== "custom" && section.format !== null && <ClockInput name={`${section.id}-time`} label={l.time} defaultSeconds={latest?.completion_seconds ?? null} />}</div></details>
       </MutationForm>
     </div>
     {savedAt && <div className="log-saved-footer"><Check size={12} /><time dateTime={savedAt}>{l.savedAt} · {date(savedAt)}</time><span>{l.revisionHint}</span></div>}
-    {history.length > 0 && <details className="log-history"><summary>{l.history} ({history.length})</summary>{history.map(result => <div key={result.id}><time>{date(result.completed_at)}</time><p>{result.completion_seconds !== null ? `${formatClock(result.completion_seconds)} · ` : ""}{result.rounds !== null ? `${result.rounds} ${t.rounds} · ` : ""}{result.repetitions !== null ? `${result.repetitions} ${t.reps}` : ""}</p>{result.sets.map((set, at) => <p key={at}>{name(set.exercise_id)} · {set.repetitions} {t.reps} · {set.load} {set.unit}</p>)}<p>{result.notes}</p></div>)}</details>}
+    {history.length > 0 && <details className="log-history"><summary>{l.history} ({history.length})</summary>{history.map(result => <div key={result.id}><time>{date(result.completed_at)}</time><p>{result.completion_seconds !== null ? `${formatClock(result.completion_seconds)} · ` : ""}{result.rounds !== null ? `${result.rounds} ${t.rounds} · ` : ""}{result.repetitions !== null ? result.format === "intervals" ? `${l.totalScore}: ${result.repetitions}` : `${result.repetitions} ${t.reps}` : ""}</p>{result.sets.map((set, at) => <p key={at}>{name(set.exercise_id)} · {set.repetitions} {t.reps} · {set.load} {set.unit}</p>)}<p>{result.notes}</p>{result.score_details?.interval_scores && <p>{l.roundScores}: {result.score_details.interval_scores.join(" · ")}</p>}{result.score_details?.intervals && section.format !== "emom" && <p>{l.legacyFlags}: {result.score_details.intervals.map(value=>value?"✓":"—").join(" · ")}</p>}</div>)}</details>}
     </div>
   </article>;
 }
