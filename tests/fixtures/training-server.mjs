@@ -38,7 +38,7 @@ createServer(async (request, response) => {
   if (table === "rpc/save_training_session") {
     const data = input.payload; const id = data.id ?? randomUUID();
     if(sessions.some(session=>session.id===id && session.deleted_at)) return send(response,{message:"Deleted session"},400);
-    const row = { ...data, id, updated_at: new Date().toISOString(), training_weeks: { training_programs: { status: data.published ? "published" : "draft" } }, workout_results: [], workout_sections: data.sections.map((section, position) => ({ ...section, id: randomUUID(), position, prescribed_exercises: section.exercises.map((exercise, index) => ({ ...exercise, position: index, prescribed_sets: exercise.sets.map((set, at) => ({ ...set, set_number: at + 1 })) })) })) };
+    const row = { ...data, id, updated_at: new Date().toISOString(), training_weeks: { training_programs: { status: data.published ? "published" : "draft" } }, workout_results: [], workout_sections: data.sections.map((section, position) => ({ ...section, interval_rounds: section.interval_rounds ?? (section.format === "tabata" ? 8 : section.format === "emom" ? Math.ceil((section.time_cap_seconds ?? 60) / 60) : null), emom_interval_seconds: section.format === "emom" ? section.emom_interval_seconds ?? 60 : null, time_cap_seconds: section.format === "emom" ? (section.interval_rounds ?? Math.ceil((section.time_cap_seconds ?? 60) / 60)) * (section.emom_interval_seconds ?? 60) : section.format === "tabata" ? (section.interval_rounds ?? 8) * ((section.tabata_work_seconds ?? 20) + (section.tabata_rest_seconds ?? 10)) : section.time_cap_seconds, id: randomUUID(), position, prescribed_exercises: section.exercises.map((exercise, index) => ({ ...exercise, position: index, prescribed_sets: exercise.sets.map((set, at) => ({ ...set, set_number: at + 1 })) })) })) };
     sessions = sessions.filter(session => session.id !== id).concat(row); return send(response, id);
   }
   if (table === "rpc/complete_training_session") {
@@ -53,6 +53,13 @@ createServer(async (request, response) => {
     const row = sessions.find(session => session.id === payload.session_id);
     const section = row?.workout_sections.find(section => section.id === payload.result.section_id);
     if (!row || row.deleted_at || !section || row.training_weeks.training_programs.status !== "published") return send(response, { message: "Unavailable" }, 400);
+    const details=payload.result.score_details??{};
+    if(details.intervals && section.format==="emom" && (details.intervals.length!==section.interval_rounds || payload.result.rounds!==details.intervals.filter(Boolean).length)) return send(response,{message:"EMOM prescribed round count mismatch"},400);
+    if(details.intervals && section.format!=="emom") return send(response,{message:"Completion flags are EMOM-only"},400);
+    if(["intervals","tabata"].includes(section.format)) {
+      const scores=details.interval_scores;const count=section.interval_rounds;
+      if(!Array.isArray(scores)||scores.length!==count||!scores.every(value=>Number.isInteger(value)&&value>=0&&value<=100000)||payload.result.rounds!==count||payload.result.repetitions!==(section.format==="tabata"?Math.min(...scores):scores.reduce((sum,value)=>sum+value,0))) return send(response,{message:"Invalid numeric round scores"},400);
+    } else if(details.interval_scores) return send(response,{message:"Numeric scores outside format"},400);
     const previous = row.workout_results.filter(result => result.section_id === section.id).at(-1);
     if ((previous?.id ?? null) !== payload.expected_result_id) return send(response, { message: "Stale revision" }, 400);
     const result = { ...payload.result, id: randomUUID(), completed_at: new Date().toISOString(), format: section.format, completed_sets: payload.result.sets };

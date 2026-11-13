@@ -24,7 +24,21 @@ export const setSchema = z.object({
 });
 export const sectionSchema = z.object({
   kind: z.enum(kinds), format: z.enum(formats).nullable(), time_cap_seconds: optionalNumber(z.number().int().positive().max(86400)), instructions: text,
+  emom_interval_seconds: optionalNumber(z.number().int().min(1).max(86400)).optional(),
+  interval_rounds: optionalNumber(z.number().int().min(1).max(1440)).optional(),
+  tabata_work_seconds: optionalNumber(z.number().int().min(5).max(300)).optional(),
+  tabata_rest_seconds: optionalNumber(z.number().int().min(5).max(300)).optional(),
   exercises: z.array(z.object({ exercise_id: z.uuid(), notes: text, sets: z.array(setSchema).max(50) })).max(30),
+}).superRefine((section, context) => {
+  if (section.format === "emom") {
+    if (!section.interval_rounds) context.addIssue({ code: "custom", path: ["interval_rounds"], message: "Set the number of rounds" });
+    if (!section.emom_interval_seconds) context.addIssue({ code: "custom", path: ["emom_interval_seconds"], message: "Set the interval duration" });
+    if (section.interval_rounds && section.emom_interval_seconds && section.interval_rounds * section.emom_interval_seconds > 86400) context.addIssue({ code: "custom", path: ["interval_rounds"], message: "Total duration must be at most 24 hours" });
+  }
+  if (section.format === "intervals" && !section.interval_rounds) context.addIssue({ code: "custom", path: ["interval_rounds"], message: "Set the number of rounds" });
+  if (section.format === "tabata" && (!section.interval_rounds || section.interval_rounds > 50)) context.addIssue({ code: "custom", path: ["interval_rounds"], message: "Set the number of rounds" });
+  if (section.format === "tabata" && !section.tabata_work_seconds) context.addIssue({ code: "custom", path: ["tabata_work_seconds"], message: "Set the work time" });
+  if (section.format === "tabata" && !section.tabata_rest_seconds) context.addIssue({ code: "custom", path: ["tabata_rest_seconds"], message: "Set the rest time" });
 });
 export const sessionSchema = z.object({
   id: z.uuid().nullable(), expected_updated_at: z.string().nullable(), title: z.string().trim().min(1).max(160), scheduled_on: dateSchema,

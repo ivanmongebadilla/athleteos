@@ -2,12 +2,68 @@ import { expect, test } from "@playwright/test";
 import { openSavedSession } from "./helpers/saved-session";
 test.setTimeout(60000);
 
+test("EMOM every three minutes for six rounds persists and logs six checks", async ({ page }, info) => {
+  await page.goto("/sessions/new?date=2026-11-13");
+  await page.getByLabel("Session title", { exact: true }).fill("Every three minutes");
+  await page.getByRole("button", { name: "WOD", exact: true }).click();
+  const block = page.locator(".builder-block");
+  await block.getByRole("button", { name: "EMOM", exact: true }).click();
+  await block.getByLabel("Every (min)", { exact: true }).fill("3");
+  await block.getByLabel("Number of rounds", { exact: true }).fill("6");
+  await expect(block).toContainText("Every 3:00 × 6 rounds · 18:00 total");
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: info.outputPath("emom-creator.png"), fullPage: true });
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await openSavedSession(page, "Every three minutes", "2026-11-13");
+  await expect(page.locator(".log-prescription")).toContainText("Every 3:00 × 6 rounds · 18:00 total");
+  await page.getByRole("link", { name: "Edit session", exact: true }).click();
+  await expect(page.getByLabel("Every (min)", { exact: true })).toHaveValue("3");
+  await expect(page.getByLabel("Number of rounds", { exact: true })).toHaveValue("6");
+  await page.getByRole("checkbox", { name: "Publish session", exact: true }).check();
+  await page.getByRole("button", { name: "Save & publish", exact: true }).click();
+  await openSavedSession(page, "Every three minutes", "2026-11-13");
+  await expect(page.locator(".interval-checklist input")).toHaveCount(6);
+  await page.getByLabel("Round 1", { exact: true }).check();
+  await page.getByLabel("Round 6", { exact: true }).check();
+  await page.getByRole("button", { name: "Save WOD", exact: true }).click();
+  await expect(page.locator(".log-save-state")).toHaveText("Completed");
+  await page.reload();
+  await expect(page.getByLabel("Round 6", { exact: true })).toBeChecked();
+  await expect(page.locator(".interval-checklist input")).toHaveCount(6);
+  await page.getByRole("combobox", { name: "Language", exact: true }).selectOption("es");
+  await expect(page.locator(".log-prescription")).toContainText("Cada 3:00 × 6 rondas · 18:00 en total");
+  await expect(page.getByLabel("Ronda 6", { exact: true })).toBeChecked();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: info.outputPath("emom-logger.png"), fullPage: true });
+});
+
 test.beforeEach(async ({ context, request }) => {
   await request.post("http://127.0.0.1:54329/reset");
   for (const name of ["Back Squat", "Thrusters", "Pull-ups"]) await request.post("http://127.0.0.1:54329/rest/v1/exercises", { data: { name, discipline: "strength" } });
   const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
   const token = `${encode({ alg: "HS256", typ: "JWT" })}.${encode({ sub: "00000000-0000-4000-8000-000000000021", aud: "authenticated", role: "authenticated", exp: 2208988800, iat: 1735689600 })}.${Buffer.alloc(32).toString("base64url")}`;
   await context.addCookies([{ name: "sb-127-auth-token", value: `base64-${encode({ access_token: token, refresh_token: "local-fixture", token_type: "bearer", expires_in: 3600, expires_at: 2208988800 })}`, domain: "127.0.0.1", path: "/" }]);
+});
+
+test("WOD timing follows its format and interval rounds persist",async({page},info)=>{
+  await page.goto("/sessions/new?date=2026-11-13");await page.getByLabel("Session title",{exact:true}).fill("Interval prescription");
+  await page.getByRole("button",{name:"WOD",exact:true}).click();const block=page.locator(".builder-block");
+  await expect(block.getByLabel("Time cap (min)",{exact:true})).toBeVisible();
+  for(const format of ["AMRAP"]){await block.getByRole("button",{name:format,exact:true}).click();await expect(block.getByLabel("Duration (min)",{exact:true})).toBeVisible();}
+  await block.getByRole("button",{name:"Intervals",exact:true}).click();await expect(block.getByLabel("Number of rounds",{exact:true})).toHaveValue("5");await block.getByLabel("Number of rounds",{exact:true}).fill("3");await block.getByLabel("Total time (optional, min)",{exact:true}).fill("25");
+  await page.getByRole("button",{name:"Save draft",exact:true}).click();await openSavedSession(page,"Interval prescription","2026-11-13");
+  await expect(page.locator(".log-prescription")).toContainText("Number of rounds: 3");await page.getByRole("link",{name:"Edit session",exact:true}).click();
+  await expect(page.getByLabel("Number of rounds",{exact:true})).toHaveValue("3");await expect(page.getByLabel("Total time (optional, min)",{exact:true})).toHaveValue("25");
+  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:info.outputPath("intervals-creator.png"),fullPage:true});
+});
+
+test("Tabata defaults to four minutes with configurable rounds and timing",async({page},info)=>{
+  await page.goto("/sessions/new?date=2026-11-13");await page.getByLabel("Session title",{exact:true}).fill("Tabata prescription");await page.getByRole("button",{name:"WOD",exact:true}).click();const block=page.locator(".builder-block");await block.getByRole("button",{name:"Tabata",exact:true}).click();
+  await expect(block.getByText("8 rounds · 20s work / 10s rest (4:00 total)",{exact:true})).toBeVisible();await expect(block.getByLabel("Number of rounds",{exact:true})).toHaveValue("8");await expect(block.getByLabel("Time cap (min)",{exact:true})).toHaveCount(0);
+  await page.getByRole("checkbox",{name:"Publish session",exact:true}).check();await page.getByRole("button",{name:"Save & publish",exact:true}).click();await openSavedSession(page,"Tabata prescription","2026-11-13");await expect(page.locator(".round-score-grid input")).toHaveCount(8);
+  await page.screenshot({path:info.outputPath("tabata-creator-saved.png"),fullPage:true});
+  const layout=await page.evaluate(()=>({viewport:innerWidth,width:document.documentElement.scrollWidth,wide:[...document.querySelectorAll("main *")].map(el=>({tag:el.tagName,cls:el.className,right:el.getBoundingClientRect().right,width:el.getBoundingClientRect().width})).filter(el=>el.right>innerWidth+1).slice(0,20)}));
+  expect(layout.width,JSON.stringify(layout)).toBeLessThanOrEqual(layout.viewport);
 });
 
 test("independent strength and WOD blocks preview, reorder, save and reopen intact", async ({ page }, info) => {

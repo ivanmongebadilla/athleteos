@@ -61,7 +61,8 @@ begin
   sid := public.save_training_session(payload);
   failed := false; begin perform public.save_training_session(payload || jsonb_build_object('id',sid,'expected_updated_at','2000-01-01T00:00:00Z')); exception when others then failed := true; end;
   if not failed then raise exception 'Stale edit accepted'; end if;
-  foreach wod_format in array array['for_time','amrap','emom','intervals','tabata','custom'] loop
+  -- Numeric round formats use the per-section writer; covered in section_logging.sql.
+  foreach wod_format in array array['for_time','amrap','emom','custom'] loop
     payload := payload || jsonb_build_object('id',null,'expected_updated_at',null,'status','scheduled','sections',jsonb_build_array(jsonb_build_object('kind','conditioning','format',wod_format,'time_cap_seconds',600,'instructions','Score fixture','exercises','[]'::jsonb)));
     sid := public.save_training_session(payload);
     select updated_at into stamp from public.training_sessions where id=sid;

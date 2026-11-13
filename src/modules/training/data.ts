@@ -39,7 +39,7 @@ export async function getSchedule(start: string, end: string) {
 }
 export async function getSession(id: string) {
   const { supabase, user } = await requireAthlete();
-  const { data, error } = await supabase.from("training_sessions").select(`${sessionSelect},workout_sections(id,position,kind,format,time_cap_seconds,instructions,prescribed_exercises(position,exercise_id,notes,prescribed_sets(set_number,repetitions,load,unit,percentage,target_rpe,rest_seconds))),workout_results(id,section_id,completed_at,format,score_details,completion_seconds,rounds,repetitions,scaled,session_rpe,notes,completed_sets(exercise_id,set_number,repetitions,load,unit,rpe,successful,rest_seconds,notes))`).eq("athlete_id", user.id).eq("id", id).maybeSingle();
+  const { data, error } = await supabase.from("training_sessions").select(`${sessionSelect},workout_sections(id,position,kind,format,time_cap_seconds,interval_rounds,emom_interval_seconds,tabata_work_seconds,tabata_rest_seconds,instructions,prescribed_exercises(position,exercise_id,notes,prescribed_sets(set_number,repetitions,load,unit,percentage,target_rpe,rest_seconds))),workout_results(id,section_id,completed_at,format,score_details,completion_seconds,rounds,repetitions,scaled,session_rpe,notes,completed_sets(exercise_id,set_number,repetitions,load,unit,rpe,successful,rest_seconds,notes))`).eq("athlete_id", user.id).eq("id", id).maybeSingle();
   if (error) throw new Error("Session unavailable");
   if (!data) return null;
   const summary = data as unknown as SessionSummary;
